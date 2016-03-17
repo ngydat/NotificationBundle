@@ -16,7 +16,7 @@ use Pagerfanta\Exception\NotValidCurrentPageException;
 use Pagerfanta\Pagerfanta;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Icap\NotificationBundle\Entity\ColorChooser;
+use Icap\NotificationBundle\Library\ColorChooser;
 use JMS\DiExtraBundle\Annotation as DI;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
@@ -120,6 +120,17 @@ class NotificationManager
         }
     }
 
+    protected function buildColorChooser()
+    {
+        $iconKeys = $this->getNotificationRepository()->findAllDistinctIconKeys();
+        $colorChooser = new ColorChooser();
+        foreach ($iconKeys as $key) {
+            $colorChooser->getColorForName($key["iconKey"]);
+        }
+
+        return $colorChooser;
+    }
+
     /**
      * @return \Icap\NotificationBundle\Repository\NotificationRepository
      */
@@ -177,7 +188,68 @@ class NotificationManager
         return $userIds;
     }
 
-    
+    protected function renderNotifications($notificationsViews)
+    {
+        $views = array();
+        $colorChooser = $this->buildColorChooser();
+        $unviewedNotificationIds = array();
+        foreach ($notificationsViews as $notificationView) {
+            $notification = $notificationView->getNotification();
+            $iconKey = $notification->getIconKey();
+            if (!empty($iconKey)) {
+                $notificationColor = $colorChooser->getColorForName($iconKey);
+                $notification->setIconColor($notificationColor);
+            }
+            $eventName = 'create_notification_item_' . $notification->getActionKey();
+            $event = new NotificationCreateDelegateViewEvent($notificationView, $this->platformName);
+
+            /** @var EventDispatcher $eventDispatcher */
+            if ($this->eventDispatcher->hasListeners($eventName)) {
+                $event = $this->eventDispatcher->dispatch($eventName, $event);
+                $views[$notificationView->getId() . ''] = $event->getResponseContent();
+            }
+            if ($notificationView->getStatus() == false) {
+                array_push(
+                    $unviewedNotificationIds,
+                    $notificationView->getId()
+                );
+            }
+        }
+        $this->markNotificationsAsViewed($unviewedNotificationIds);
+
+        return array("views" => $views, "colors" => $colorChooser->getColorObjectArray());
+    }
+
+    /**
+     * Constructor
+     * @DI\InjectParams({
+     *      "em" = @DI\Inject("doctrine.orm.entity_manager"),
+     *      "tokenStorage" = @DI\Inject("security.token_storage"),
+     *      "eventDispatcher" = @DI\Inject("event_dispatcher"),
+     *      "configHandler" = @DI\Inject("claroline.config.platform_config_handler"),
+     *      "notificationParametersManager" = @DI\Inject("icap.notification.manager.notification_user_parameters"),
+     *      "notificationPluginConfigurationManager" = @DI\Inject("icap.notification.manager.plugin_configuration")
+     * })
+     */
+    public function __construct(
+        EntityManager $em,
+        TokenStorageInterface $tokenStorage,
+        EventDispatcherInterface $eventDispatcher,
+        PlatformConfigurationHandler $configHandler,
+        NotificationUserParametersManager $notificationParametersManager,
+        NotificationPluginConfigurationManager $notificationPluginConfigurationManager
+    ) {
+        $this->em = $em;
+        $this->tokenStorage = $tokenStorage;
+        $this->eventDispatcher = $eventDispatcher;
+        $this->platformName = $configHandler->getParameter("name");
+        if ($this->platformName === null || empty($this->platformName)) {
+            $this->platformName = "Claroline";
+        }
+        $this->notificationParametersManager = $notificationParametersManager;
+        $this->notificationPluginConfigurationManager = $notificationPluginConfigurationManager;
+    }
+
 
     /**
      * @return EntityManager
@@ -343,10 +415,15 @@ class NotificationManager
         return $this->getUserNotificationsList($userId, 1, $config->getDropdownItems());
     }
 
-    public function getPaginatedNotifications($userId, $page = 1)
+    public function getPaginatedNotifications($userId, $page = 1, $category = null)
     {
         $config = $this->getConfigurationAndPurge();
-        return $this->getUserNotificationsList($userId, $page, $config->getMaxPerPage());
+        return $this->getUserNotificationsList($userId, $page, $config->getMaxPerPage(), false, null, $category);
+    }
+
+    public function markAllNotificationsAsViewed($userId)
+    {
+        $this->getNotificationViewerRepository()->markAllAsViewed($userId);
     }
 
     /**
@@ -359,9 +436,12 @@ class NotificationManager
      * @throws \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
      * @return mixed
      */
-    public function getUserNotificationsList($userId, $page = 1, $maxResult = -1, $isRss = false, $notificationParameters = null)
+    public function getUserNotificationsList($userId, $page = 1, $maxResult = -1, $isRss = false, $notificationParameters = null, $category = null)
     {
+
         $query = $this->getUserNotifications($userId, $page, $maxResult, $isRss, $notificationParameters, false);
+
+      
         $adapter = new DoctrineORMAdapter($query, false);
         $pager = new Pagerfanta($adapter);
         $pager->setMaxPerPage($maxResult);
@@ -371,12 +451,13 @@ class NotificationManager
         } catch (NotValidCurrentPageException $e) {
             throw new NotFoundHttpException();
         }
-
-        $views = $this->renderNotifications($pager->getCurrentPageResults());
+        $colorChooser = $this->buildColorChooser();
+        $notifications = $this->renderNotifications($pager->getCurrentPageResults());
 
         return array(
             'pager'             => $pager,
-            'notificationViews' => $views
+            'notificationViews' => $notifications["views"],
+            'colors'            => $notifications["colors"]
         );
     }
 
@@ -417,38 +498,6 @@ class NotificationManager
             true,
             $notificationUserParameters
         );
-    }
-
-    protected function renderNotifications($notificationsViews)
-    {
-        $views = array();
-        $colorChooser = new ColorChooser();
-        $unviewedNotificationIds = array();
-        foreach ($notificationsViews as $notificationView) {
-            $notification = $notificationView->getNotification();
-            $iconKey = $notification->getIconKey();
-            if (!empty($iconKey)) {
-                $notificationColor = $colorChooser->getColorForName($iconKey);
-                $notification->setIconColor($notificationColor);
-            }
-            $eventName = 'create_notification_item_' . $notification->getActionKey();
-            $event = new NotificationCreateDelegateViewEvent($notificationView, $this->platformName);
-
-            /** @var EventDispatcher $eventDispatcher */
-            if ($this->eventDispatcher->hasListeners($eventName)) {
-                $event = $this->eventDispatcher->dispatch($eventName, $event);
-                $views[$notificationView->getId() . ''] = $event->getResponseContent();
-            }
-            if ($notificationView->getStatus() == false) {
-                array_push(
-                    $unviewedNotificationIds,
-                    $notificationView->getId()
-                );
-            }
-        }
-        $this->markNotificationsAsViewed($unviewedNotificationIds);
-
-        return $views;
     }
 
     /**
