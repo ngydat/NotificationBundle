@@ -47,19 +47,13 @@ class ApiController extends FOSRestController
         return $this->notificationManager->getUserNotifications($user->getId());
     }
 
-    /**
-     * @View(serializerGroups={"api"})
-     */
-    public function getUnreadNotificationsAction()
-    {
-        
-    }
-
-
-
     
 
-    
 
-    
+
+
+
+
+
+
 }
