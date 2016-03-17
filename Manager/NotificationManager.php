@@ -220,35 +220,7 @@ class NotificationManager
         return array("views" => $views, "colors" => $colorChooser->getColorObjectArray());
     }
 
-    /**
-     * Constructor
-     * @DI\InjectParams({
-     *      "em" = @DI\Inject("doctrine.orm.entity_manager"),
-     *      "tokenStorage" = @DI\Inject("security.token_storage"),
-     *      "eventDispatcher" = @DI\Inject("event_dispatcher"),
-     *      "configHandler" = @DI\Inject("claroline.config.platform_config_handler"),
-     *      "notificationParametersManager" = @DI\Inject("icap.notification.manager.notification_user_parameters"),
-     *      "notificationPluginConfigurationManager" = @DI\Inject("icap.notification.manager.plugin_configuration")
-     * })
-     */
-    public function __construct(
-        EntityManager $em,
-        TokenStorageInterface $tokenStorage,
-        EventDispatcherInterface $eventDispatcher,
-        PlatformConfigurationHandler $configHandler,
-        NotificationUserParametersManager $notificationParametersManager,
-        NotificationPluginConfigurationManager $notificationPluginConfigurationManager
-    ) {
-        $this->em = $em;
-        $this->tokenStorage = $tokenStorage;
-        $this->eventDispatcher = $eventDispatcher;
-        $this->platformName = $configHandler->getParameter("name");
-        if ($this->platformName === null || empty($this->platformName)) {
-            $this->platformName = "Claroline";
-        }
-        $this->notificationParametersManager = $notificationParametersManager;
-        $this->notificationPluginConfigurationManager = $notificationPluginConfigurationManager;
-    }
+
 
 
     /**
