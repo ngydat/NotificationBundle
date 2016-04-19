@@ -19,6 +19,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Icap\NotificationBundle\Library\ColorChooser;
 use JMS\DiExtraBundle\Annotation as DI;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use RMS\PushNotificationsBundle\Message\AndroidMessage;
 
 /**
  * Class NotificationManager
@@ -343,7 +344,21 @@ class NotificationManager
                     $notificationViewer->setViewerId($userId);
                     $notificationViewer->setStatus(false);
 
+                    //push
+
+                    // $message = new AndroidMessage();
+                    // $message->setGCM(true);
+                    // $message->setMessage("coucou");
+                    // $message->setDeviceIdentifier('192.168.56.101:5555');
+                    //
+                    // $this->container->get('rms_push_notifications')->send($message);
+
+
+
+
                     $this->getEntityManager()->persist($notificationViewer);
+
+
                 }
             }
         }
@@ -413,7 +428,7 @@ class NotificationManager
 
         $query = $this->getUserNotifications($userId, $page, $maxResult, $isRss, $notificationParameters, false);
 
-      
+
         $adapter = new DoctrineORMAdapter($query, false);
         $pager = new Pagerfanta($adapter);
         $pager->setMaxPerPage($maxResult);
@@ -452,7 +467,7 @@ class NotificationManager
 
         return $executeQuery ? $query->getResult(): $query;
     }
-    
+
     public function getUserNotificationsListRss($rssId)
     {
         $config = $this->getConfigurationAndPurge();

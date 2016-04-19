@@ -47,7 +47,16 @@ class ApiController extends FOSRestController
         return $this->notificationManager->getUserNotifications($user->getId());
     }
 
-    
+   
+   /** Mark all the notifications as viewed
+    * @View(serializerGroups={"api"})
+    */
+   public function getNotificationsReadAction(){
+         $user = $this->tokenStorage->getToken()->getUser();
+         $this->notificationManager->markAllNotificationsAsViewed($user->getId());
+         return $this->notificationManager->getUserNotifications($user->getId());
+   }
+
 
 
 
