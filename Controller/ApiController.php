@@ -16,6 +16,7 @@ use FOS\RestBundle\Controller\Annotations\View;
 use JMS\DiExtraBundle\Annotation as DI;
 use Nelmio\ApiDocBundle\Annotation\ApiDoc;
 use Icap\NotificationBundle\Manager\NotificationManager;
+use Claroline\CoreBundle\Entity\Oauth\ClarolineAccess;
 
 class ApiController extends FOSRestController
 {
@@ -48,7 +49,7 @@ class ApiController extends FOSRestController
     }
 
    
-   /** Mark all the notifications as viewed
+   /** Mark all notifications as read
     * @View(serializerGroups={"api"})
     */
    public function getNotificationsReadAction(){
